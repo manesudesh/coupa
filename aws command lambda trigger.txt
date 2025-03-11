@@ -1,0 +1,82 @@
+sam build
+sam package --template-file template.yaml --output-template-file packaged.yaml 
+sam deploy  --template-file packaged.yaml --resolve-s3 s3://sudeshmane-bucket2  --stack-name sam-stack-app-126 --no-confirm-changeset
+
+
+// add permission to lambda function...replace lambda function name and s3 bucket name 
+aws lambda add-permission   --function-name sam-stack-app-129-HelloWorldFunction-RYyGgimETt7s   --principal s3.amazonaws.com  --statement-id s3invoke   --action "lambda:InvokeFunction"   --source-arn arn:aws:s3:::staticweb-bucket-prod   --source-account 565393036687
+  
+  
+  // assign s3evnts to lambda function...replace lambda arn 
+aws s3api put-bucket-notification-configuration  --bucket staticweb-bucket-prod   --notification-configuration '{   \"LambdaFunctionConfigurations\" : [     {     \"LambdaFunctionArn\" : \"arn:aws:lambda:us-east-1:565393036687:function:sam-stack-app-129-HelloWorldFunction-RYyGgimETt7s\",       \"Events\" : [\"s3:ObjectCreated:*\"]     }     ]}'
+
+
+// upload code to lambda function...replace lambda fumction name and bucket name
+aws lambda update-function-code   --function-name sam-stack-app-129-HelloWorldFunction-RYyGgimETt7s    --jar-file fileb://C:/Users/Sudesh_Mane/AWS_Course/projects/codebuild/AwsRepo/target/HelloWorld-1.0.jar
+
+// modify processing time...replace lambda fumction name 
+aws lambda update-function-configuration   --function-name sam-stack-app-129-HelloWorldFunction-RYyGgimETt7s   --timeout 300
+
+// modify memory...replace lambda fumction name 
+aws lambda update-function-configuration   --function-name sam-stack-app-129-HelloWorldFunction-RYyGgimETt7s  --memory-size 1024
+
+
+
+
+
+
+s3 bucket
+
+
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  SourceBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: my-source-bucket
+      VersioningConfiguration:
+        Status: Enabled
+      ReplicationConfiguration:
+        Role: !GetAtt ReplicationRole.Arn
+        Rules:
+          - Id: ReplicationRule
+            Status: Enabled
+            Prefix: ''
+            Destination:
+              Bucket: !GetAtt DestinationBucket.Arn
+
+  DestinationBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: my-destination-bucket
+      VersioningConfiguration:
+        Status: Enabled
+
+  ReplicationRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: ReplicationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObjectVersionForReplication'
+                  - 's3:GetObjectVersionAcl'
+                  - 's3:GetObjectVersionTagging'
+                Resource: !Sub 'arn:aws:s3:::my-source-bucket/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ReplicateObject'
+                  - 's3:ReplicateDelete'
+                  - 's3:ReplicateTags'
+                Resource: !Sub 'arn:aws:s3:::my-destination-bucket/*'
+
